@@ -1,12 +1,14 @@
 # travlogs
 
+[![Build Status](https://travis-ci.org/Leedehai/travlogs.svg?branch=master)](https://travis-ci.org/Leedehai/travlogs)
+
 Traverse a Clang(-like) compilation database for a C/C++ project.
 
 This package converts the JSON log into a graph, then handles some queries on the graph (*yeah! This is **the** CS*).
 
 > Each record in the complication log essentially consists of edges into one node (which files, through what operation, produce what). Graph building converts these records into a set of nodes. The graph is directional acyclic (DAG).
 
-The graph is also cached to save runtime. As long as the [script itself](./travlogs.py) and the compilation log do not mutate, the cached graph will be used to handle queries.
+The graph is cached to save runtime. As long as the [script itself](./travlogs.py) and the compilation log do not mutate, the cached graph will be used to handle queries.
 
 The compilation log has the same format of [Clang's compilation database](https://clang.llvm.org/docs/JSONCompilationDatabase.html) with these augmentations:
 - (mandatory field) replace the `file` field, which only stores the first input file for each compilation command, with a `inputs` field, which stores all input files,
@@ -27,11 +29,13 @@ This package has two APIs, look at the [source code](./travlogs.py) for usage
 
 ## Testing
 
-TODO
+```bash
+./test.sh
+```
 
 ## Examples
 
-TODO: backburner-ed
+See function `sanity_check()` in the code.
 
 ## Why don't you give more docs?
 I might, but this is a package merely for my own projects. I intend to use it for my build automation scripts.

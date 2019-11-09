@@ -1,5 +1,4 @@
 .vscode
-build_log*
 .DS_Store
 log*
 *.cache

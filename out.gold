@@ -1,0 +1,43 @@
+[33mfind_sources_from_targets(): case 1[0m
+targets:
+	utests/base/c-style-fstring-test
+	utests/base/llvm-style-rtti-test
+=> sources:
+../../include/ADT/c-style-fstring.h
+../../include/ADT/ctor-macros.h
+../../include/ADT/llvm-style-rtti.h
+../../include/support/backtrace-impl.h
+../../include/support/backtrace.h
+../../include/support/io-utils.h
+../../src/support/backtrace.cc
+../../src/support/io-utils.cc
+../../unit-tests/ADT/c-style-fstring-test.cc
+../../unit-tests/ADT/llvm-style-rtti-test.cc
+../../utils/debug-utils.h
+
+[33mfind_sources_from_targets(): case 2[0m
+targets:
+	../../unit-tests/ADT/c-style-fstring-test.cc
+=> sources:
+../../unit-tests/ADT/c-style-fstring-test.cc
+
+[33mfind_targets_from_sources(): case 1[0m
+sources:
+	../../src/ADT/string-ref.cc
+	../../unit-tests/ADT/c-style-fstring-test.cc
+=> targets:
+libinfra.a
+libinfra.so
+utests/base/c-style-fstring-test
+utests/base/string-ref-test
+
+[33mfind_targets_from_sources(): case 2[0m
+sources:
+	../../include/ADT/string-ref.h
+=> targets:
+libinfra.a
+libinfra.so
+utests/base/string-map-test
+utests/base/string-ref-test
+utests/base/text-buffer-test
+utests/base/word-int-test

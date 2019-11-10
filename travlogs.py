@@ -9,6 +9,10 @@
 # This script cannot handle huge graphs, because all data is loaded in
 # memory at once; there's no such demand in my projects.
 # For details, see the README.md file.
+#
+# NOTE on serializing/deserializing: do not use the 'pickle' package
+#      because 1) it makes the cache file unreadable (bad to debug)
+#      and 2) it results in a larger cache file than the current implementation
 
 import os
 import json
@@ -27,6 +31,9 @@ SCRIPT_HASH = script_h.hexdigest()[:5]
 def debug(s):
     print(s)
 
+def parse_repr_line_(line, sigil, sep):
+    return line[len(sigil):].split(sep)
+
 class NameIdBidirectionalMap: # ever-growing, value immutable
     REPR_SIGIL, REPR_SEP = "id", "^"
     def __init__(self, name2id = None, id2name = None):
@@ -35,7 +42,7 @@ class NameIdBidirectionalMap: # ever-growing, value immutable
         self.name2id = name2id if name2id != None else {} # key: node name (str), val: id (int)
         self.id2name = id2name if id2name != None else {} # key: id (int), val: node name (str)
         self.counter = len(name2id) if name2id != None else 0
-    # serialize
+    # serialize: do not use 'pickle'
     def __repr__(self):
         return '\n'.join([
             "{sigil} {node_id} {sep} {node_name}".format(
@@ -44,12 +51,17 @@ class NameIdBidirectionalMap: # ever-growing, value immutable
             )
             for node_id in sorted(self.id2name)
         ])
-    # deserialize
+    # deserialize: do not use 'pickle'
     @classmethod
     def from_repr(cls, repr_str):
         name2id, id2name = {}, {}
-        for line in filter(lambda l : len(l.strip()) and l.startswith(cls.REPR_SIGIL), repr_str.split('\n')):
-            node_id_str, node_name_str = line[len(cls.REPR_SIGIL):].split(cls.REPR_SEP)
+        filtered_line_generator = (
+            l for l in repr_str.split('\n')
+            if len(l.strip()) and l.startswith(cls.REPR_SIGIL)
+        )
+        for line in filtered_line_generator:
+            node_id_str, node_name_str = parse_repr_line_(
+                line = line, sigil = cls.REPR_SIGIL, sep = cls.REPR_SEP)
             name2id[node_name_str.strip()] = int(node_id_str)
             id2name[int(node_id_str)] = node_name_str.strip()
         return NameIdBidirectionalMap(name2id, id2name)
@@ -77,7 +89,7 @@ class DAGNodeRec:
         # store both parents and children for faster searching
         self.prevs = prevs if prevs != None else set() # id of parent nodes
         self.nexts = nexts if nexts != None else set() # id of child nodes
-    
+
 class DAG: # directional acyclic graph, ever growing
     REPR_SIGIL, REPR_SEP = "io", "^"
     def __init__(self, other=None):
@@ -85,21 +97,28 @@ class DAG: # directional acyclic graph, ever growing
         #      see: https://stackoverflow.com/questions/1132941/least-astonishment-and-the-mutable-default-argument
         self.nodes = other if other != None else {} # key: node id, val: DAGNodeRec
         self.num_edge = 0
-    # serialize
+    # serialize: do not use 'pickle'
     def __repr__(self):
         return '\n'.join([
             "{sigil} {node_id} {sep} {prevs} {sep} {nexts}".format(
                 sigil = self.REPR_SIGIL, sep = self.REPR_SEP,
-                node_id = node_id, prevs = repr(self.nodes[node_id].prevs), nexts = repr(self.nodes[node_id].nexts)
+                node_id = node_id,
+                prevs = repr(self.nodes[node_id].prevs),
+                nexts = repr(self.nodes[node_id].nexts)
             )
             for node_id in self.nodes
         ])
-    # deserialize
+    # deserialize: do not use 'pickle'
     @classmethod
     def from_repr(cls, repr_str):
         dag = {}
-        for line in filter(lambda l : len(l.strip()) and l.startswith(cls.REPR_SIGIL), repr_str.split('\n')):
-            node_id_str, prevs_str, nexts_str = line[len(cls.REPR_SIGIL):].split(cls.REPR_SEP)
+        filtered_line_generator = (
+            l for l in repr_str.split('\n')
+            if len(l.strip()) and l.startswith(cls.REPR_SIGIL)
+        )
+        for line in filtered_line_generator:
+            node_id_str, prevs_str, nexts_str = parse_repr_line_(
+                line = line, sigil = cls.REPR_SIGIL, sep = cls.REPR_SEP)
             dag[int(node_id_str)] = DAGNodeRec(eval(prevs_str), eval(nexts_str))
         return DAG(dag)
     def node_num(self):
@@ -122,26 +141,28 @@ class DAG: # directional acyclic graph, ever growing
         if node_rec == None:
             return None
         return node_rec.prevs # set of node ids
- 
+
 def construct_build_graph_(data, record_filter=None):
     name_id_bimap, graph = NameIdBidirectionalMap(), DAG()
     for i, record in enumerate(data): # for each compilation object (dict)
         if record_filter != None and record_filter(record) == False:
             continue
+        # node names
         in_nodes_arr, out_node = record.get("inputs", None), record.get("output", None)
         if in_nodes_arr == None or out_node == None:
-            raise ValueError("missing keys: 'inputs' or 'output' in compilation object #%d" % (i + 1))
+            raise ValueError(
+                "missing key 'inputs' or 'output' in compilation object #%d" % (i + 1))
         in_nodes = set(in_nodes_arr)
         for header in record.get("headers", []):
             in_nodes.add(header)
         # node id
-        in_node_ids = map(lambda name: name_id_bimap.insert(name), in_nodes)
+        in_node_id_generator = (name_id_bimap.insert(name) for name in in_nodes)
         out_node_id = name_id_bimap.insert(out_node)
-        # add edge
-        for in_node_id in in_node_ids: # do not use list.map or list comprehension for side effects
+        # add edge: do not use map() or list comprehension for side effects
+        for in_node_id in in_node_id_generator:
             graph.add_edge(in_node_id, out_node_id)
     return name_id_bimap, graph
-   
+
 # read from graph cache or construct graph anew
 # record_filter: a predicate - ignore a compilation object if the result is False
 def load_build_graph_impl_(data, data_hash, graph_cache_filename=None, record_filter=None):
@@ -167,15 +188,15 @@ def load_build_graph_impl_(data, data_hash, graph_cache_filename=None, record_fi
     return graph, name_id_bimap
 
 INTERESTED_EDGE_TYPES = [ "cc", "cxx", "link", "solink", "alink" ]
-def load_build_graph_(build_out_root, logfile_under_build):
-    logfile_path = os.path.join(build_out_root, logfile_under_build)
+def load_build_graph_(root_dir, log_basename):
+    logfile_path = os.path.join(root_dir, log_basename)
     with open(logfile_path, 'rb') as f: # read as bytes
         log_data = f.read()
     h = hashlib.sha256()
     h.update(log_data)
     return load_build_graph_impl_(
         data = json.loads(log_data.decode()), data_hash = h.hexdigest(),
-        graph_cache_filename = os.path.join(build_out_root, BUILD_GRAPH_CACHE_BASENAME),
+        graph_cache_filename = os.path.join(root_dir, BUILD_GRAPH_CACHE_BASENAME),
         record_filter = lambda e: e["rule"] in INTERESTED_EDGE_TYPES)
 
 def bfs_(q, graph, name_id_bimap, node_name_filter, get_gotos, exclude_order_only=True):
@@ -198,20 +219,33 @@ def bfs_(q, graph, name_id_bimap, node_name_filter, get_gotos, exclude_order_onl
     return result # set of id
 
 # export
+class NodeNamesNotInGraphError(ValueError):
+    def __init__(self, not_found_names):
+        self.not_found = not_found_names
+    def __str__(self):
+        return "node names not found in graph: " + ', '.join(self.not_found)
+
+# export
 # Given a list of target names, find the source names
 # NOTE "sources" are nodes which do not have parents (source nodes),
 #       but "targets" has no restriction
 # NOTE if a node's name doesn't pass node_name_filter, it is ignored as if pruned
-# @param build_out_root: str - the directory where the log is in
-# @param logfile_under_build: str - compilation log relative to build_out_root
+# @param root_dir: str - the directory where the log is in and
+#                        the base path of path strings in logs
+# @param log_basename: str - compilation log relative to root_dir
 # @param targets: list of str - names in the log
-# @param node_name_filter: predicate of node name - a node is ignored if the result is False
+# @param node_name_filter: predicate of node name - node is ignored if the result is False
 # @return list of str - source names in the log
-def find_sources_from_targets(build_out_root, logfile_under_build, targets, node_name_filter=None):
-    graph, name_id_bimap = load_build_graph_(build_out_root, logfile_under_build)
-    q = deque([ name_id_bimap.get_id_from_name(target) for target in targets ])
-    if None in q:
-        return None
+# @throws NodeNamesNotInGraph
+def find_sources_from_targets(root_dir, log_basename, targets, node_name_filter=None):
+    graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
+    input_ids = [ name_id_bimap.get_id_from_name(target) for target in targets ]
+    not_found_names = [
+        targets[i] for i, input_id in enumerate(input_ids) if input_id == None
+    ]
+    if len(not_found_names):
+        raise NodeNamesNotInGraphError(not_found_names)
+    q = deque(input_ids)
     source_nodes = bfs_(q, graph, name_id_bimap, node_name_filter, DAG.get_prevs_from_id)
     return [ name_id_bimap.get_name_from_id(sid) for sid in source_nodes ]
 
@@ -220,16 +254,21 @@ def find_sources_from_targets(build_out_root, logfile_under_build, targets, node
 # NOTE "targets" are nodes which do not have children (sink nodes),
 #       but "sources" has no restriction
 # NOTE if a node's name doesn't pass node_name_filter, it is ignored as if pruned
-# @param build_out_root: str - the directory where the log is in
-# @param logfile_under_build: str - compilation log relative to build_out_root
+# @param root_dir: str - the directory where the log is in and
+#                        the base path of path strings in logs
+# @param log_basename: str - compilation log relative to root_dir
 # @param sources: list of str - names in the log
-# @param node_name_filter: predicate of node name - a node is ignored if the result is False
+# @param node_name_filter: predicate of node name - node is ignored if the result is False
 # @return list of str - target names in the log
-def find_targets_from_sources(build_out_root, logfile_under_build, sources, node_name_filter=None):
-    graph, name_id_bimap = load_build_graph_(build_out_root, logfile_under_build)
-    q = deque([ name_id_bimap.get_id_from_name(source) for source in sources ])
-    if None in q:
-        return None
+def find_targets_from_sources(root_dir, log_basename, sources, node_name_filter=None):
+    graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
+    input_ids = [ name_id_bimap.get_id_from_name(source) for source in sources ]
+    not_found_names = [
+        sources[i] for i, input_id in enumerate(input_ids) if input_id == None
+    ]
+    if len(not_found_names):
+        raise NodeNamesNotInGraphError(not_found_names)
+    q = deque(input_ids)
     sink_nodes = bfs_(q, graph, name_id_bimap, node_name_filter, DAG.get_nexts_from_id)
     return [ name_id_bimap.get_name_from_id(sid) for sid in sink_nodes ]
 
@@ -249,8 +288,9 @@ def sanity_check():
         from_targets,
         lambda name: "googletest" not in name
     )
-    print("targets:\n\t" + "\n\t".join(from_targets) + "\n=> sources:\n" + '\n'.join(sorted(found_sources)))
-    
+    print("targets:\n\t" + "\n\t".join(from_targets)
+        + "\n=> sources:\n" + '\n'.join(sorted(found_sources)))
+
     print("\n\x1b[33mfind_sources_from_targets(): case 2\x1b[0m")
     from_targets = [
         "../../unit-tests/ADT/c-style-fstring-test.cc",
@@ -260,7 +300,8 @@ def sanity_check():
         from_targets,
         lambda name: "googletest" not in name
     )
-    print("targets:\n\t" + "\n\t".join(from_targets) + "\n=> sources:\n" + '\n'.join(sorted(found_sources)))
+    print("targets:\n\t" + "\n\t".join(from_targets)
+        + "\n=> sources:\n" + '\n'.join(sorted(found_sources)))
 
     print("\n\x1b[33mfind_targets_from_sources(): case 1\x1b[0m")
     from_sources = [
@@ -271,7 +312,8 @@ def sanity_check():
         ".", "build_log.json",
         from_sources,
     )
-    print("sources:\n\t" + "\n\t".join(from_sources) + "\n=> targets:\n" + '\n'.join(sorted(found_targets)))
+    print("sources:\n\t" + "\n\t".join(from_sources)
+        + "\n=> targets:\n" + '\n'.join(sorted(found_targets)))
 
     print("\n\x1b[33mfind_targets_from_sources(): case 2\x1b[0m")
     from_sources = [
@@ -281,8 +323,8 @@ def sanity_check():
         ".", "build_log.json",
         from_sources,
     )
-    print("sources:\n\t" + "\n\t".join(from_sources) + "\n=> targets:\n" + '\n'.join(sorted(found_targets)))
+    print("sources:\n\t" + "\n\t".join(from_sources)
+        + "\n=> targets:\n" + '\n'.join(sorted(found_targets)))
 
 if __name__ == "__main__":
     sanity_check()
-    

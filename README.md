@@ -27,6 +27,9 @@ This package has two APIs, look at the [source code](./travlogs.py) for usage
 - `find_sources_from_targets`: given targets, find which header/source files are involved
 - `find_targets_from_sources`: given header/source files, find which targets are affected
 
+Exceptions:
+- `NodeNamesNotInGraphError`: invalid input names
+
 ## Testing
 
 ```bash

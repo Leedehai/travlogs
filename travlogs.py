@@ -199,18 +199,19 @@ def load_build_graph_(root_dir, log_basename):
         graph_cache_filename = os.path.join(root_dir, BUILD_GRAPH_CACHE_BASENAME),
         record_filter = lambda e: e["rule"] in INTERESTED_EDGE_TYPES)
 
-def bfs_(q, graph, name_id_bimap, node_name_filter, get_gotos, exclude_order_only=True):
+def bfs_find_ends_(input_ids, graph, name_id_bimap, node_name_filter, get_gotos, exclude_order_only=True):
     def filter_goto_(node_id):
         node_name = name_id_bimap.get_name_from_id(node_id)
         if exclude_order_only and node_name.startswith("||"):
             return False
         return node_name_filter(node_name) if node_name_filter != None else True
+    q = deque(input_ids)
     visited, result = set(), set()
     while len(q) != 0:
         nid = q.popleft()
         visited.add(nid)
         effective_gotos = list(filter(filter_goto_, get_gotos(graph, nid)))
-        if len(effective_gotos) == 0: # is a sink node
+        if len(effective_gotos) == 0: # out-degree is 0 (effectively)
             result.add(nid)
         else: # not a sink node
             for goto_id in effective_gotos:
@@ -218,12 +219,45 @@ def bfs_(q, graph, name_id_bimap, node_name_filter, get_gotos, exclude_order_onl
                     q.append(goto_id)
     return result # set of id
 
+def bfs_find_paths_(input_ids, graph, name_id_bimap, node_name_filter, get_gotos, exclude_order_only=True):
+    def filter_goto_(node_id):
+        node_name = name_id_bimap.get_name_from_id(node_id)
+        if exclude_order_only and node_name.startswith("||"):
+            return False
+        return node_name_filter(node_name) if node_name_filter != None else True
+    q = deque([ nid ] for nid in input_ids)
+    visited, result = set(), []
+    while len(q) != 0:
+        path = q.popleft()
+        path_end = path[-1]
+        visited.add(path_end)
+        effective_gotos = list(filter(filter_goto_, get_gotos(graph, path_end)))
+        if len(effective_gotos) == 0: # out-degree is 0 (effectively)
+            result.append(path)
+        else: # not a sink node
+            for goto_id in effective_gotos:
+                if goto_id not in visited:
+                    q.append(path + [ goto_id ])
+    return result # list of list of id
+
 # export
 class NodeNamesNotInGraphError(ValueError):
     def __init__(self, not_found_names):
         self.not_found = not_found_names
     def __str__(self):
         return "node names not found in graph: " + ', '.join(self.not_found)
+
+# traverse DAG
+def traverse_(graph, name_id_bimap, starts, traverse_how, goto_how, node_name_filter=None):
+    input_ids = [ name_id_bimap.get_id_from_name(start) for start in starts ]
+    not_found_names = [
+        starts[i] for i, input_id in enumerate(input_ids) if input_id == None
+    ]
+    if len(not_found_names):
+        raise NodeNamesNotInGraphError(not_found_names)
+    intermediate_res = traverse_how(
+        input_ids, graph, name_id_bimap, node_name_filter, goto_how)
+    return intermediate_res
 
 # export
 # Given a list of target names, find the source names
@@ -239,15 +273,26 @@ class NodeNamesNotInGraphError(ValueError):
 # @throws NodeNamesNotInGraph
 def find_sources_from_targets(root_dir, log_basename, targets, node_name_filter=None):
     graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
-    input_ids = [ name_id_bimap.get_id_from_name(target) for target in targets ]
-    not_found_names = [
-        targets[i] for i, input_id in enumerate(input_ids) if input_id == None
-    ]
-    if len(not_found_names):
-        raise NodeNamesNotInGraphError(not_found_names)
-    q = deque(input_ids)
-    source_nodes = bfs_(q, graph, name_id_bimap, node_name_filter, DAG.get_prevs_from_id)
+    source_nodes = traverse_(
+        graph, name_id_bimap, targets,
+        bfs_find_ends_, DAG.get_prevs_from_id,
+        node_name_filter
+    )
     return [ name_id_bimap.get_name_from_id(sid) for sid in source_nodes ]
+
+# export
+# similar to above, but return paths along the way, not just the arrived nodes
+def find_paths_from_targets(root_dir, log_basename, targets, node_name_filter=None):
+    graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
+    paths_to_sources = traverse_(
+        graph, name_id_bimap, targets,
+        bfs_find_paths_, DAG.get_prevs_from_id,
+        node_name_filter
+    )
+    return [
+        [ name_id_bimap.get_name_from_id(nid) for nid in path ]
+        for path in paths_to_sources
+    ]
 
 # export
 # Given a list of source names, find the target names
@@ -262,15 +307,26 @@ def find_sources_from_targets(root_dir, log_basename, targets, node_name_filter=
 # @return list of str - target names in the log
 def find_targets_from_sources(root_dir, log_basename, sources, node_name_filter=None):
     graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
-    input_ids = [ name_id_bimap.get_id_from_name(source) for source in sources ]
-    not_found_names = [
-        sources[i] for i, input_id in enumerate(input_ids) if input_id == None
-    ]
-    if len(not_found_names):
-        raise NodeNamesNotInGraphError(not_found_names)
-    q = deque(input_ids)
-    sink_nodes = bfs_(q, graph, name_id_bimap, node_name_filter, DAG.get_nexts_from_id)
+    sink_nodes = traverse_(
+        graph, name_id_bimap, sources,
+        bfs_find_ends_, DAG.get_nexts_from_id,
+        node_name_filter
+    )
     return [ name_id_bimap.get_name_from_id(sid) for sid in sink_nodes ]
+
+# export
+# similar to above, but return paths along the way, not just the arrived nodes
+def find_paths_from_sources(root_dir, log_basename, sources, node_name_filter=None):
+    graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
+    paths_to_targets = traverse_(
+        graph, name_id_bimap, sources,
+        bfs_find_paths_, DAG.get_nexts_from_id,
+        node_name_filter
+    )
+    return [
+        [ name_id_bimap.get_name_from_id(nid) for nid in path ]
+        for path in paths_to_targets
+    ]
 
 # not a comprehensive test
 def sanity_check():
@@ -325,6 +381,35 @@ def sanity_check():
     )
     print("sources:\n\t" + "\n\t".join(from_sources)
         + "\n=> targets:\n" + '\n'.join(sorted(found_targets)))
+
+    print("\n\x1b[33mfind_paths_from_targets():\x1b[0m")
+    from_targets = [
+        "utests/base/c-style-fstring-test",
+    ]
+    paths_to_sources = [
+        "\n  > ".join(path)
+        for path in find_paths_from_targets(
+            ".", "build_log.json",
+            from_targets,
+            lambda name: "googletest" not in name
+        )
+    ]
+    print("targets:\n\t" + "\n\t".join(from_targets)
+        + "\n=> paths:\n" + '\n'.join(sorted(paths_to_sources)))
+
+    print("\n\x1b[33mfind_paths_from_sources():\x1b[0m")
+    from_sources = [
+        "../../include/ADT/string-ref.h",
+    ]
+    paths_to_targets = [
+        "\n  > ".join(path)
+        for path in find_paths_from_sources(
+            ".", "build_log.json",
+            from_sources
+        )
+    ]
+    print("sources:\n\t" + "\n\t".join(from_sources)
+        + "\n=> paths:\n" + '\n'.join(sorted(paths_to_targets)))
 
 if __name__ == "__main__":
     sanity_check()

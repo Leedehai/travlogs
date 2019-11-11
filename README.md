@@ -23,9 +23,13 @@ The compilation log has the same format of [Clang's compilation database](https:
 
 ## API
 
-This package has two APIs, look at the [source code](./travlogs.py) for usage
-- `find_sources_from_targets`: given targets, find which header/source files are involved
-- `find_targets_from_sources`: given header/source files, find which targets are affected
+This package has four APIs, look at the [source code](./travlogs.py) for usage
+- from targets to source/header files
+    - `find_sources_from_targets`: given targets, find which header/source files are involved
+    - `find_paths_from_targets`: given targets, find paths to all involved header/source files
+- from source/header files to targets
+    - `find_targets_from_sources`: given header/source files, find which targets are affected
+    - `find_paths_from_sources`: given header/source files, find paths to all affected targets
 
 Exceptions:
 - `NodeNamesNotInGraphError`: invalid input names

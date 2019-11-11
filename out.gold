@@ -41,3 +41,104 @@ utests/base/string-map-test
 utests/base/string-ref-test
 utests/base/text-buffer-test
 utests/base/word-int-test
+
+[33mfind_paths_from_targets():[0m
+targets:
+	utests/base/c-style-fstring-test
+=> paths:
+utests/base/c-style-fstring-test
+  > misc/libbacktrace.so
+  > obj/src/support/libbacktrace.so/backtrace.o
+  > ../../include/ADT/ctor-macros.h
+utests/base/c-style-fstring-test
+  > misc/libbacktrace.so
+  > obj/src/support/libbacktrace.so/backtrace.o
+  > ../../include/support/backtrace-impl.h
+utests/base/c-style-fstring-test
+  > misc/libbacktrace.so
+  > obj/src/support/libbacktrace.so/backtrace.o
+  > ../../include/support/backtrace.h
+utests/base/c-style-fstring-test
+  > misc/libbacktrace.so
+  > obj/src/support/libbacktrace.so/backtrace.o
+  > ../../include/support/io-utils.h
+utests/base/c-style-fstring-test
+  > misc/libbacktrace.so
+  > obj/src/support/libbacktrace.so/backtrace.o
+  > ../../src/support/backtrace.cc
+utests/base/c-style-fstring-test
+  > misc/libbacktrace.so
+  > obj/src/support/libbacktrace.so/backtrace.o
+  > ../../utils/debug-utils.h
+utests/base/c-style-fstring-test
+  > misc/libbacktrace.so
+  > obj/src/support/libbacktrace.so/io-utils.o
+  > ../../include/ADT/ctor-macros.h
+utests/base/c-style-fstring-test
+  > misc/libbacktrace.so
+  > obj/src/support/libbacktrace.so/io-utils.o
+  > ../../include/support/io-utils.h
+utests/base/c-style-fstring-test
+  > misc/libbacktrace.so
+  > obj/src/support/libbacktrace.so/io-utils.o
+  > ../../src/support/io-utils.cc
+utests/base/c-style-fstring-test
+  > misc/libbacktrace.so
+  > obj/src/support/libbacktrace.so/io-utils.o
+  > ../../utils/debug-utils.h
+utests/base/c-style-fstring-test
+  > obj/unit-tests/ADT/c-style-fstring-test/c-style-fstring-test.o
+  > ../../include/ADT/c-style-fstring.h
+utests/base/c-style-fstring-test
+  > obj/unit-tests/ADT/c-style-fstring-test/c-style-fstring-test.o
+  > ../../include/support/backtrace.h
+utests/base/c-style-fstring-test
+  > obj/unit-tests/ADT/c-style-fstring-test/c-style-fstring-test.o
+  > ../../unit-tests/ADT/c-style-fstring-test.cc
+utests/base/c-style-fstring-test
+  > obj/unit-tests/ADT/c-style-fstring-test/c-style-fstring-test.o
+  > ../../utils/debug-utils.h
+
+[33mfind_paths_from_sources():[0m
+sources:
+	../../include/ADT/string-ref.h
+=> paths:
+../../include/ADT/string-ref.h
+  > obj/src/ADT/ADT/string-ref.o
+  > libinfra.a
+../../include/ADT/string-ref.h
+  > obj/src/ADT/ADT/string-ref.o
+  > libinfra.so
+../../include/ADT/string-ref.h
+  > obj/src/ADT/ADT/word-int.o
+  > libinfra.a
+../../include/ADT/string-ref.h
+  > obj/src/ADT/ADT/word-int.o
+  > libinfra.so
+../../include/ADT/string-ref.h
+  > obj/src/support/support/text-buffer.o
+  > libinfra.a
+../../include/ADT/string-ref.h
+  > obj/src/support/support/text-buffer.o
+  > libinfra.so
+../../include/ADT/string-ref.h
+  > obj/unit-tests/ADT/string-map-test/string-map-test.o
+  > utests/base/string-map-test
+../../include/ADT/string-ref.h
+  > obj/unit-tests/ADT/string-ref-test/string-ref-test.o
+  > utests/base/string-ref-test
+../../include/ADT/string-ref.h
+  > obj/unit-tests/ADT/string-ref-test/string-ref.o
+  > utests/base/string-ref-test
+../../include/ADT/string-ref.h
+  > obj/unit-tests/ADT/word-int-test/word-int-test.o
+  > utests/base/word-int-test
+../../include/ADT/string-ref.h
+  > obj/unit-tests/ADT/word-int-test/word-int.o
+  > utests/base/word-int-test
+../../include/ADT/string-ref.h
+  > obj/unit-tests/support/text-buffer-test/text-buffer-test.o
+  > utests/base/text-buffer-test
+../../include/ADT/string-ref.h
+  > obj/unit-tests/support/text-buffer-test/text-buffer.o
+  > utests/base/text-buffer-test

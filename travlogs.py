@@ -211,9 +211,9 @@ def bfs_find_ends_(input_ids, graph, name_id_bimap, node_name_filter, get_gotos,
         nid = q.popleft()
         visited.add(nid)
         effective_gotos = list(filter(filter_goto_, get_gotos(graph, nid)))
-        if len(effective_gotos) == 0: # out-degree is 0 (effectively)
+        if len(effective_gotos) == 0: # out-degree is 0 (effectively): sink node
             result.add(nid)
-        else: # not a sink node
+        else:
             for goto_id in effective_gotos:
                 if goto_id not in visited:
                     q.append(goto_id)
@@ -226,18 +226,16 @@ def bfs_find_paths_(input_ids, graph, name_id_bimap, node_name_filter, get_gotos
             return False
         return node_name_filter(node_name) if node_name_filter != None else True
     q = deque([ nid ] for nid in input_ids)
-    visited, result = set(), []
+    result = []
     while len(q) != 0:
         path = q.popleft()
         path_end = path[-1]
-        visited.add(path_end)
         effective_gotos = list(filter(filter_goto_, get_gotos(graph, path_end)))
-        if len(effective_gotos) == 0: # out-degree is 0 (effectively)
+        if len(effective_gotos) == 0: # out-degree is 0 (effectively): sink node
             result.append(path)
-        else: # not a sink node
+        else:
             for goto_id in effective_gotos:
-                if goto_id not in visited:
-                    q.append(path + [ goto_id ])
+                q.append(path + [ goto_id ])
     return result # list of list of id
 
 # export
@@ -307,12 +305,12 @@ def find_paths_from_targets(root_dir, log_basename, targets, node_name_filter=No
 # @return list of str - target names in the log
 def find_targets_from_sources(root_dir, log_basename, sources, node_name_filter=None):
     graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
-    sink_nodes = traverse_(
+    target_nodes = traverse_(
         graph, name_id_bimap, sources,
         bfs_find_ends_, DAG.get_nexts_from_id,
         node_name_filter
     )
-    return [ name_id_bimap.get_name_from_id(sid) for sid in sink_nodes ]
+    return [ name_id_bimap.get_name_from_id(tid) for tid in target_nodes ]
 
 # export
 # similar to above, but return paths along the way, not just the arrived nodes

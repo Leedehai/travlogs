@@ -6,7 +6,7 @@ rm -f ./graph.cache
 
 # without cache
 ./travlogs.py > log1
-diff -q log1 out.gold # exit is non-zero if files differ
+diff log1 out.gold # exit is non-zero if files differ
 if [ $? -ne 0 ]; then
     has_error=1
     echo "error found: run without cache"
@@ -14,7 +14,7 @@ fi
 
 # cache exists, run again
 ./travlogs.py > log2
-diff -q log2 out.gold # exit is non-zero if files differ
+diff log2 out.gold # exit is non-zero if files differ
 if [ $? -ne 0 ]; then
     has_error=1
     echo "error found: run with cache"

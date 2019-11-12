@@ -165,7 +165,8 @@ def construct_build_graph_(data, record_filter=None):
 
 # read from graph cache or construct graph anew
 # record_filter: a predicate - ignore a compilation object if the result is False
-def load_build_graph_impl_(data, data_hash, graph_cache_filename=None, record_filter=None):
+def load_build_graph_impl_(
+    data, data_hash, graph_cache_filename=None, record_filter=None):
     if graph_cache_filename and os.path.isfile(graph_cache_filename):
         with open(graph_cache_filename, 'r') as f:
             hash_str = f.readline().strip("#").strip()
@@ -199,7 +200,9 @@ def load_build_graph_(root_dir, log_basename):
         graph_cache_filename = os.path.join(root_dir, BUILD_GRAPH_CACHE_BASENAME),
         record_filter = lambda e: e["rule"] in INTERESTED_EDGE_TYPES)
 
-def bfs_find_ends_(input_ids, graph, name_id_bimap, node_name_filter, get_gotos, exclude_order_only=True):
+def bfs_find_ends_(
+    input_ids, graph, name_id_bimap, node_name_filter,
+    get_gotos, exclude_order_only=True):
     def filter_goto_(node_id):
         node_name = name_id_bimap.get_name_from_id(node_id)
         if exclude_order_only and node_name.startswith("||"):
@@ -219,7 +222,9 @@ def bfs_find_ends_(input_ids, graph, name_id_bimap, node_name_filter, get_gotos,
                     q.append(goto_id)
     return result # set of id
 
-def bfs_find_paths_(input_ids, graph, name_id_bimap, node_name_filter, get_gotos, exclude_order_only=True):
+def bfs_find_paths_(
+    input_ids, graph, name_id_bimap, node_name_filter,
+    get_gotos, exclude_order_only=True):
     def filter_goto_(node_id):
         node_name = name_id_bimap.get_name_from_id(node_id)
         if exclude_order_only and node_name.startswith("||"):
@@ -246,15 +251,16 @@ class NodeNamesNotInGraphError(ValueError):
         return "node names not found in graph: " + ', '.join(self.not_found)
 
 # traverse DAG
-def traverse_(graph, name_id_bimap, starts, traverse_how, goto_how, node_name_filter=None):
+def traverse_(
+    graph, name_id_bimap, starts, traverse_func, get_goto_func, node_name_filter=None):
     input_ids = [ name_id_bimap.get_id_from_name(start) for start in starts ]
     not_found_names = [
         starts[i] for i, input_id in enumerate(input_ids) if input_id == None
     ]
     if len(not_found_names):
         raise NodeNamesNotInGraphError(not_found_names)
-    intermediate_res = traverse_how(
-        input_ids, graph, name_id_bimap, node_name_filter, goto_how)
+    intermediate_res = traverse_func(
+        input_ids, graph, name_id_bimap, node_name_filter, get_goto_func)
     return intermediate_res
 
 # export
@@ -269,7 +275,8 @@ def traverse_(graph, name_id_bimap, starts, traverse_how, goto_how, node_name_fi
 # @param node_name_filter: predicate of node name - node is ignored if the result is False
 # @return list of str - source names in the log
 # @throws NodeNamesNotInGraph
-def find_sources_from_targets(root_dir, log_basename, targets, node_name_filter=None):
+def find_sources_from_targets(
+    root_dir, log_basename, targets, node_name_filter=None):
     graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
     source_nodes = traverse_(
         graph, name_id_bimap, targets,
@@ -280,7 +287,8 @@ def find_sources_from_targets(root_dir, log_basename, targets, node_name_filter=
 
 # export
 # similar to above, but return paths along the way, not just the arrived nodes
-def find_paths_from_targets(root_dir, log_basename, targets, node_name_filter=None):
+def find_paths_from_targets(
+    root_dir, log_basename, targets, node_name_filter=None):
     graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
     paths_to_sources = traverse_(
         graph, name_id_bimap, targets,
@@ -303,7 +311,8 @@ def find_paths_from_targets(root_dir, log_basename, targets, node_name_filter=No
 # @param sources: list of str - names in the log
 # @param node_name_filter: predicate of node name - node is ignored if the result is False
 # @return list of str - target names in the log
-def find_targets_from_sources(root_dir, log_basename, sources, node_name_filter=None):
+def find_targets_from_sources(
+    root_dir, log_basename, sources, node_name_filter=None):
     graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
     target_nodes = traverse_(
         graph, name_id_bimap, sources,
@@ -314,7 +323,8 @@ def find_targets_from_sources(root_dir, log_basename, sources, node_name_filter=
 
 # export
 # similar to above, but return paths along the way, not just the arrived nodes
-def find_paths_from_sources(root_dir, log_basename, sources, node_name_filter=None):
+def find_paths_from_sources(
+    root_dir, log_basename, sources, node_name_filter=None):
     graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
     paths_to_targets = traverse_(
         graph, name_id_bimap, sources,

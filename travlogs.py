@@ -213,13 +213,13 @@ def bfs_find_ends_(
     while len(q) != 0:
         nid = q.popleft()
         visited.add(nid)
-        effective_gotos = list(filter(filter_goto_, get_gotos(graph, nid)))
-        if len(effective_gotos) == 0: # out-degree is 0 (effectively): sink node
+        arrived_at_sink = True
+        for goto_id in (gid for gid in get_gotos(graph, nid) if filter_goto_(gid)):
+            arrived_at_sink = False
+            if goto_id not in visited:
+                q.append(goto_id)
+        if arrived_at_sink:
             result.add(nid)
-        else:
-            for goto_id in effective_gotos:
-                if goto_id not in visited:
-                    q.append(goto_id)
     return result # set of id
 
 def bfs_find_paths_(
@@ -234,13 +234,13 @@ def bfs_find_paths_(
     result = []
     while len(q) != 0:
         path = q.popleft()
-        path_end = path[-1]
-        effective_gotos = list(filter(filter_goto_, get_gotos(graph, path_end)))
-        if len(effective_gotos) == 0: # out-degree is 0 (effectively): sink node
+        nid = path[-1] # path's current end
+        arrived_at_sink = True
+        for goto_id in (gid for gid in get_gotos(graph, nid) if filter_goto_(gid)):
+            arrived_at_sink = False
+            q.append(path + [ goto_id ])
+        if arrived_at_sink:
             result.append(path)
-        else:
-            for goto_id in effective_gotos:
-                q.append(path + [ goto_id ])
     return result # list of list of id
 
 # export

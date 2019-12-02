@@ -5,7 +5,7 @@ has_error=0
 rm -f ./graph.cache
 
 # without cache
-./travlogs.py > log1
+./travlogs.py --check > log1
 diff log1 out.gold # exit is non-zero if files differ
 if [ $? -ne 0 ]; then
     has_error=1
@@ -13,7 +13,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # cache exists, run again
-./travlogs.py > log2
+./travlogs.py --check > log2
 diff log2 out.gold # exit is non-zero if files differ
 if [ $? -ne 0 ]; then
     has_error=1

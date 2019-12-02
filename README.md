@@ -21,7 +21,14 @@ The compilation log has the same format of [Clang's compilation database](https:
 - Python 2.7 or Python 3.5+
 - Linux, macOS, or Windows
 
-## API
+## As commandline utility
+
+This package has a CLI:
+```
+./travlogs.py --help
+```
+
+## As library
 
 This package has four APIs, look at the [source code](./travlogs.py) for usage
 - from targets to source/header files
@@ -43,8 +50,5 @@ Exceptions:
 ## Examples
 
 See function `sanity_check()` in the code.
-
-## Why don't you give more docs?
-I might, but this is a package merely for my own projects. I intend to use it for my build automation scripts.
 
 ###### EOF

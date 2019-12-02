@@ -14,9 +14,10 @@
 #      because 1) it makes the cache file unreadable (bad to debug)
 #      and 2) it results in a larger cache file than the current implementation
 
-import os
+import os, sys
 import json
 import hashlib
+import argparse
 from collections import deque
 
 # written under the build output directory
@@ -161,7 +162,7 @@ def construct_build_graph_(data, record_filter=None):
         # add edge: do not use map() or list comprehension for side effects
         for in_node_id in in_node_id_generator:
             graph.add_edge(in_node_id, out_node_id)
-    return name_id_bimap, graph
+    return graph, name_id_bimap
 
 # read from graph cache or construct graph anew
 # record_filter: a predicate - ignore a compilation object if the result is False
@@ -179,25 +180,30 @@ def load_build_graph_impl_(
         # reaching here: graph cache is outdated, bust the cache
         os.remove(graph_cache_filename)
     # build graph from data
-    name_id_bimap, graph = construct_build_graph_(data, record_filter)
+    graph, name_id_bimap = construct_build_graph_(data, record_filter)
     # serialize the data, write cahce
-    with open(graph_cache_filename, 'w') as f:
-        f.write("# %s:%s\n" % (SCRIPT_HASH, data_hash))
-        f.write("\n# N: %d E: %d\n\n" % (graph.node_num(), graph.edge_num()))
-        f.write("# id prevs nexts\n" + repr(graph) + "\n\n")
-        f.write("# id name\n" + repr(name_id_bimap) + "\n")
+    if graph_cache_filename:
+        with open(graph_cache_filename, 'w') as f:
+            f.write("# %s:%s\n" % (SCRIPT_HASH, data_hash))
+            f.write("\n# N: %d E: %d\n\n" % (graph.node_num(), graph.edge_num()))
+            f.write("# id prevs nexts\n" + repr(graph) + "\n\n")
+            f.write("# id name\n" + repr(name_id_bimap) + "\n")
     return graph, name_id_bimap
 
 INTERESTED_EDGE_TYPES = [ "cc", "cxx", "link", "solink", "alink" ]
-def load_build_graph_(root_dir, log_basename):
+def load_build_graph_(root_dir, log_basename, cache_aware=True):
     logfile_path = os.path.join(root_dir, log_basename)
     with open(logfile_path, 'rb') as f: # read as bytes
         log_data = f.read()
     h = hashlib.sha256()
     h.update(log_data)
+    if cache_aware:
+        cache_name = os.path.join(root_dir, BUILD_GRAPH_CACHE_BASENAME)
+    else:
+        cache_name = None
     return load_build_graph_impl_(
         data = json.loads(log_data.decode()), data_hash = h.hexdigest(),
-        graph_cache_filename = os.path.join(root_dir, BUILD_GRAPH_CACHE_BASENAME),
+        graph_cache_filename = cache_name,
         record_filter = lambda e: e["rule"] in INTERESTED_EDGE_TYPES)
 
 def bfs_find_ends_(
@@ -273,11 +279,12 @@ def traverse_(
 # @param log_basename: str - compilation log relative to root_dir
 # @param targets: list of str - names in the log
 # @param node_name_filter: predicate of node name - node is ignored if the result is False
+# @param cache_aware: boolean - if True, use/write cache
 # @return list of str - source names in the log
 # @throws NodeNamesNotInGraph
 def find_sources_from_targets(
-    root_dir, log_basename, targets, node_name_filter=None):
-    graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
+    root_dir, log_basename, targets, node_name_filter=None, cache_aware=True):
+    graph, name_id_bimap = load_build_graph_(root_dir, log_basename, cache_aware)
     source_nodes = traverse_(
         graph, name_id_bimap, targets,
         bfs_find_ends_, DAG.get_prevs_from_id,
@@ -288,8 +295,8 @@ def find_sources_from_targets(
 # export
 # similar to above, but return paths along the way, not just the arrived nodes
 def find_paths_from_targets(
-    root_dir, log_basename, targets, node_name_filter=None):
-    graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
+    root_dir, log_basename, targets, node_name_filter=None, cache_aware=True):
+    graph, name_id_bimap = load_build_graph_(root_dir, log_basename, cache_aware)
     paths_to_sources = traverse_(
         graph, name_id_bimap, targets,
         bfs_find_paths_, DAG.get_prevs_from_id,
@@ -310,10 +317,11 @@ def find_paths_from_targets(
 # @param log_basename: str - compilation log relative to root_dir
 # @param sources: list of str - names in the log
 # @param node_name_filter: predicate of node name - node is ignored if the result is False
+# @param cache_aware: boolean - if True, use/write cache
 # @return list of str - target names in the log
 def find_targets_from_sources(
-    root_dir, log_basename, sources, node_name_filter=None):
-    graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
+    root_dir, log_basename, sources, node_name_filter=None, cache_aware=True):
+    graph, name_id_bimap = load_build_graph_(root_dir, log_basename, cache_aware)
     target_nodes = traverse_(
         graph, name_id_bimap, sources,
         bfs_find_ends_, DAG.get_nexts_from_id,
@@ -324,8 +332,8 @@ def find_targets_from_sources(
 # export
 # similar to above, but return paths along the way, not just the arrived nodes
 def find_paths_from_sources(
-    root_dir, log_basename, sources, node_name_filter=None):
-    graph, name_id_bimap = load_build_graph_(root_dir, log_basename)
+    root_dir, log_basename, sources, node_name_filter=None, cache_aware=True):
+    graph, name_id_bimap = load_build_graph_(root_dir, log_basename, cache_aware)
     paths_to_targets = traverse_(
         graph, name_id_bimap, sources,
         bfs_find_paths_, DAG.get_nexts_from_id,
@@ -419,5 +427,112 @@ def sanity_check():
     print("sources:\n\t" + "\n\t".join(from_sources)
         + "\n=> paths:\n" + '\n'.join(sorted(paths_to_targets)))
 
+# as commandline utility
+USAGE = """travlogs.py [-h] [--check]
+                   OUT_PATH [--db]
+                   [-t|--src-from-targets T [T ...]]
+                   [-s|--targets-from-src S [S ...]]
+                   [-T|--paths-from-targets T [T ...]]
+                   [-S|--paths-from-src S [S ...]]"""
+def cli_main():
+    argparser = argparse.ArgumentParser(
+        description="Traverse a Clang(-like) compilation database for a C/C++ project.",
+        epilog="For usage as a library, see README.md",
+        usage=USAGE)
+    argparser.add_argument("outdir", metavar="OUT_PATH", nargs='?', default=".",
+                           help="build output directory, defualt: .")
+    argparser.add_argument("--check", action="store_true",
+                           help="(dev) run a sanity test of this utility")
+    argparser.add_argument("--db", metavar="FILE", default="build_log.json",
+                           help="compilation database file path relative to OUT_PATH, default: build_log.json")
+    argparser.add_argument("-t", "--src-from-targets", metavar="T", nargs='+', type=str, default=[],
+                           help="find sources from targets")
+    argparser.add_argument("-s", "--targets-from-src", metavar="S", nargs='+', type=str, default=[],
+                           help="find targets from sources")
+    argparser.add_argument("-T", "--paths-from-targets", metavar="T", nargs='+', type=str, default=[],
+                           help="find paths from targets")
+    argparser.add_argument("-S", "--paths-from-src", metavar="S", nargs='+', type=str, default=[],
+                           help="find paths from sources")
+    args = argparser.parse_args()
+
+    action_count = sum([
+        args.check == True,
+        len(args.src_from_targets) != 0,
+        len(args.targets_from_src) != 0,
+        len(args.paths_from_targets) != 0,
+        len(args.paths_from_src) != 0,
+    ])
+    if not os.path.isdir(args.outdir):
+        sys.exit("[Error] directory not found: %s" % args.log)
+    db_norm_path = os.path.normpath(os.path.join(args.outdir, args.db))
+    if not os.path.isfile(db_norm_path):
+        sys.exit("[Error] file not found: %s" % db_norm_path)
+    if action_count != 1:
+        sys.exit("[Error] require exactly 1 action, but %d given." % action_count)
+
+    NODE_NAME_PASSTHROUGH = lambda name : True
+    rebase_filename_to_outdir = lambda p: os.path.relpath(p, args.outdir)
+    rebase_filename_to_curdir = lambda p: os.path.normpath(os.path.join(args.outdir, p))
+    if args.check:
+        return sanity_check()
+    if len(args.src_from_targets):
+        try:
+            found_sources = find_sources_from_targets(
+                args.outdir, args.db,
+                [ rebase_filename_to_outdir(p) for p in args.src_from_targets ],
+                node_name_filter = NODE_NAME_PASSTHROUGH,
+                cache_aware = False
+            )
+        except NodeNamesNotInGraphError as e:
+            print(e)
+            return 1
+        print('\n'.join([ rebase_filename_to_curdir(p) for p in found_sources ]))
+        return 0
+    if len(args.targets_from_src):
+        try:
+            found_targets = find_targets_from_sources(
+                args.outdir, args.db,
+                [ rebase_filename_to_outdir(p) for p in args.targets_from_src ],
+                node_name_filter = NODE_NAME_PASSTHROUGH,
+                cache_aware = False
+            )
+        except NodeNamesNotInGraphError as e:
+            print(e)
+            return 1
+        print('\n'.join([ rebase_filename_to_curdir(p) for p in found_targets ]))
+        return 0
+    if len(args.paths_from_targets):
+        try:
+            paths_to_sources = [
+                "\n  > ".join([ rebase_filename_to_curdir(node) for node in path ])
+                for path in find_paths_from_targets(
+                    args.outdir, args.db,
+                    [ rebase_filename_to_outdir(p) for p in args.paths_from_targets ],
+                    node_name_filter = NODE_NAME_PASSTHROUGH,
+                    cache_aware = False
+                )
+            ]
+        except NodeNamesNotInGraphError as e:
+            print(e)
+            return 1
+        print('\n'.join(sorted(paths_to_sources)))
+        return 0
+    if len(args.paths_from_src):
+        try:
+            paths_to_targets = [
+                "\n  > ".join([ rebase_filename_to_curdir(node) for node in path ])
+                for path in find_paths_from_sources(
+                    args.outdir, args.db,
+                    [ rebase_filename_to_outdir(p) for p in args.paths_from_src ],
+                    node_name_filter = NODE_NAME_PASSTHROUGH,
+                    cache_aware = False
+                )
+            ]
+        except NodeNamesNotInGraphError as e:
+            print(e)
+            return 1
+        print('\n'.join(sorted(paths_to_targets)))
+        return 0
+
 if __name__ == "__main__":
-    sanity_check()
+    sys.exit(cli_main())

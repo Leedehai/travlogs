@@ -18,7 +18,7 @@ The compilation log has the same format of [Clang's compilation database](https:
 
 ## Prerequisites
 
-- Python 2.7 or Python 3.5+
+- Python 3.5+
 - Linux, macOS, or Windows
 
 ## As commandline utility

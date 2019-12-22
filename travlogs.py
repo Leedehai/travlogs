@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright (c) 2019 Leedehai. All rights reserved.
 # Licensed under the MIT License.
 #
@@ -190,7 +190,7 @@ def load_build_graph_impl_(
             f.write("# id name\n" + repr(name_id_bimap) + "\n")
     return graph, name_id_bimap
 
-INTERESTED_EDGE_TYPES = [ "cc", "cxx", "link", "solink", "alink" ]
+INTERESTED_EDGE_TYPES = { "cc", "cxx", "link", "solink", "alink" }
 def load_build_graph_(root_dir, log_basename, cache_aware=True):
     logfile_path = os.path.join(root_dir, log_basename)
     with open(logfile_path, 'rb') as f: # read as bytes
@@ -204,7 +204,8 @@ def load_build_graph_(root_dir, log_basename, cache_aware=True):
     return load_build_graph_impl_(
         data = json.loads(log_data.decode()), data_hash = h.hexdigest(),
         graph_cache_filename = cache_name,
-        record_filter = lambda e: e["rule"] in INTERESTED_EDGE_TYPES)
+        record_filter = lambda e: e["rule"] in INTERESTED_EDGE_TYPES
+    )
 
 def bfs_find_ends_(
     input_ids, graph, name_id_bimap, node_name_filter,
